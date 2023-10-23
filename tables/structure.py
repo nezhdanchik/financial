@@ -5,16 +5,21 @@ import pickle
 
 
 class Table:
-    def __init__(self, count_rows, count_columns, names_of_rows=None, names_of_columns=None, values=None, ):
+    def __init__(self, count_rows, count_columns, names_of_rows=None, names_of_columns=None):
         self.count_rows = count_rows  # количество строк
         self.count_columns = count_columns  # количество столбцов
-        self.names_of_rows = names_of_rows
-        self.names_of_columns = names_of_columns
+        self.names_of_rows = names_of_rows  # список названий строк
+        self.names_of_columns = names_of_columns  # список названий столбцов
         self.has_names_of_rows = bool(names_of_rows)
         self.has_names_of_columns = bool(names_of_columns)
-        self.values = values #значения без названий строк и столбцов
-        # self.rows_d = None  # словарь  строк
-        # self.columns_d = None  # cловарь столбцов
+
+        # для типизирования столбцов
+        self.column_types = dict()
+        self.column_types_by_number = dict()
+
+        #это удалить потом
+        # d['вишня'] : int    название столбца -> тип данных в нём
+        # d[1]: 'вишня'   номер столбца -> название столбца
 
         self.total_rows = count_rows + 1  # кол-во строк с учётом строки с названием столбцов
         self.total_columns = count_columns + 1  # кол-во столбцов с учётом строки с названием строк
@@ -40,6 +45,11 @@ class Table:
             if len(names_of_columns) != count_columns:
                 raise ValueError(f"Количество названий для столбцов не совпадает с количеством столбцов")
             self.set_names_of_columns(names_of_columns)
+
+        # задаём типы для столбцов по умолчанию
+        for i in range(1, len(self.field[0])):
+            self.column_types[self.field[0][i]] = None
+            self.column_types_by_number[i] = None
 
     def create_rows_d(self):
         '''делаем словарь для строк'''
@@ -74,7 +84,6 @@ class Table:
 
     @classmethod
     def _convert_matrix_to_table(cls, matrix, has_names_of_rows, has_names_of_columns):
-        # print(matrix, type(matrix), has_names_of_rows, has_names_of_columns)
         names_of_rows = []
         names_of_columns = []
         # парсим названия стобцов
@@ -105,7 +114,6 @@ class Table:
                 loaded_data.append(line)
         return cls._convert_matrix_to_table(loaded_data, has_names_of_rows, has_names_of_columns)
 
-
     def _remove_unnecessary_names(self):
         '''удаляет название столбцов или строк, если их не было изначально
         это нужно для правильного сохранения таблицы'''
@@ -116,7 +124,6 @@ class Table:
             for i in range(len(result)):
                 result[i].pop(0)
         return result
-
 
     def save_csv(self, file_name):
         with open(file_name, 'w', newline='') as f:
@@ -131,7 +138,7 @@ class Table:
 
     def save_pickle(self, file_name):
         with open(file_name, 'wb') as f:
-            pickle.dump(self.field, f)
+            pickle.dump(self._remove_unnecessary_names(), f)
 
     # -----------------------------------Задание 2----------------------------------------------------
 
@@ -150,15 +157,37 @@ class Table:
         for line in self.field:
             if line[1] in args:
                 result.append(line)
+        if copy_table:
+            return copy.deepcopy(result)
         return result
 
     def get_column_types(self, by_number=True):
-        pass
+        if by_number:
+            return self.column_types_by_number
+        return self.column_types
 
     def set_column_types(self, types_dict, by_number=True):
-        pass
+        try:
+            if by_number: # 2: int,   1: str
+                new_column_types_by_number = types_dict
+                new_column_types = dict()
+                #заполняем типы по столбцам по именам
+                for i in range(1, len(self.field[0])):
+                    new_column_types[self.field[0][i]] = types_dict[i]
+            else:
+                new_column_types = types_dict
+                new_column_types_by_number = dict()
+                #заполняем типы по столбцам по индексам
+                for key in types_dict:
+                    ind = self.field[0].index(key) + 1
+                    new_column_types_by_number[ind] = types_dict[key]
+        except (ValueError, KeyError):
+            print('Ошибка в установлении типов столбцов')
+        else:
+            self.column_types = new_column_types
+            self.column_types_by_number = new_column_types_by_number
 
-    def get_values(column=0):
+    def get_values(self, column=0):
         pass
 
     def get_value(column=0):
@@ -175,10 +204,10 @@ class Table:
         # ищем в столбце слово с максимальной длинной
         for x in range(self.total_columns):
             # длина этого слова
-            mxlen = max([len(self.field[y][x]) for y in range(self.total_rows)])
+            mxlen = max([len(str(self.field[y][x])) for y in range(self.total_rows)])
             # делаем все слова такой же длины + ...
             for y in range(self.total_rows):
-                new_fielf[y][x] = self.field[y][x].ljust(mxlen + 4, " ")
+                new_fielf[y][x] = str(self.field[y][x]).ljust(mxlen + 4, " ")
         for i in new_fielf:
             print(*i)
 
@@ -190,48 +219,66 @@ class Table:
 # t.set_names_of_rows(['Даня', 'Петя', 'Верблюд'])
 # t.print_table()
 
-# t = Table.load_pickle('testpickle.pkl', True, True)
-
 
 # -----------------------------------------Тест для задания 1-----------------------------------------------------
 l1 = Table.load_csv('ovoshi.csv', True, True)
 l2 = Table.load_csv('ovoshi_only_rows.csv', True, False)
 l3 = Table.load_csv('ovoshi_only_columns.csv', False, True)
 l4 = Table.load_csv('ovoshi_nothing.csv', False, False)
-objs = [l1, l2, l3, l4]
-for o in objs:
-    o.print_table()
+# objs = [l1, l2, l3, l4]
+# for o in objs:
+#     o.print_table()
 # l1.save_csv('ovoshi.csv')
 # l2.save_csv('ovoshi_only_rows.csv')
 # l3.save_csv('ovoshi_only_columns.csv')
 # l4.save_csv('ovoshi_nothing.csv')
 
-# l4.set_one_value('5', 1, 1)
-# l3.print_table()
-# l3.save_csv('ovoshebasa_only_columns.csv')
+p1 = Table.load_pickle('ovoshi.pkl', True, True)
+p2 = Table.load_pickle('ovoshi_only_rows.pkl', True, False)
+p3 = Table.load_pickle('ovoshi_only_columns.pkl', False, True)
+p4 = Table.load_pickle('ovoshi_nothing.pkl', False, False)
+# objs = [p1, p2, p3, p4]
+# for o in objs:
+#     o.print_table()
+# p1.save_pickle('ovoshi.pkl')
+# p2.save_pickle('ovoshi_only_rows.pkl')
+# p3.save_pickle('ovoshi_only_columns.pkl')
+# p4.save_pickle('ovoshi_nothing.pkl')
+
+# work_obj = l4   #объект, на котором проверяются тесты
 
 # print('---------------------------Тест для  get_rows_by_number------------------------------------------------')
-# t = Table.load_csv('ovoshebasa.csv', ';',True, True)
-# t.print_table()
-# t1 = t.get_rows_by_number(1, copy_table=False)
-# print(t1)
-# t1[0][0] = 'манго'
-# print(t1)
-# t.print_table()
+# print('Было:')
+# work_obj.print_table()
+# res = work_obj.get_rows_by_number(1, copy_table=False)
+# print(res)
+# print('\nСтало:')
+# res[0][0] = 'манго'
+# print(res)
+# work_obj.print_table()
 # print('-------------------------------------------------------------------------------------------------------')
 
-# print('---------------------------Тест для  get_rows_by_index------------------------------------------------')
-# t = Table.load_csv('ovoshebasa.csv', ';',True, True)
-# t.print_table()
-# t1 = t.get_rows_by_index('7')
-# print(t1)
-# t1[0][0] = 'манго'
-# print(t1)
-# t.print_table()
+# print('---------------------------Тест для  get_rows_by_index-------------------------------------------------')
+# print('Было:')
+# work_obj.print_table()
+# res = work_obj.get_rows_by_index('7', '3', copy_table=False)
+# print(res)
+# print('\nСтало:')
+# res[0][0] = 'манго'
+# print(res)
+# work_obj.print_table()
 # print('-------------------------------------------------------------------------------------------------------')
 
-# p.print_table()
-# p.get_rows_by_number(1)
 
-# # t.save_pickle('testpickle.pkl')
-# Table.load_pickle('testpickle.pkl')
+# print('---------------------------Тест для  get_column_types, set_column_types --------------------------------')
+# test1 = Table(2,2,)
+# test1.set_all_values([[1,'text'], ['too', 32]])
+# test1.print_table()
+# print('Было:')
+# print(test1.get_column_types(by_number=False))
+# print('\nСтало:')
+# test1.set_column_types({2: float, 1: int}, by_number=True)
+# print(test1.get_column_types(by_number=False))
+# print(test1.get_column_types())
+# print('--------------------------------------------------------------------------------------------------------')
+
