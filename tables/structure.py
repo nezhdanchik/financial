@@ -1,5 +1,4 @@
 import copy
-from copy import deepcopy
 import csv
 import pickle
 
@@ -107,12 +106,15 @@ class Table:
     # -------------------------------------Задание 1-----------------------------------------------
     @classmethod
     def load_csv(cls, file_name, has_names_of_rows, has_names_of_columns):
-        with open(file_name) as f:
-            csv_reader = csv.reader(f)
-            loaded_data = []
-            for line in csv_reader:
-                loaded_data.append(line)
-        return cls._convert_matrix_to_table(loaded_data, has_names_of_rows, has_names_of_columns)
+        try:
+            with open(file_name) as f:
+                csv_reader = csv.reader(f)
+                loaded_data = []
+                for line in csv_reader:
+                    loaded_data.append(line)
+            return cls._convert_matrix_to_table(loaded_data, has_names_of_rows, has_names_of_columns)
+        except FileNotFoundError:
+            print('Указанный файл не существует')
 
     def _remove_unnecessary_names(self):
         '''удаляет название столбцов или строк, если их не было изначально
@@ -132,9 +134,12 @@ class Table:
 
     @classmethod
     def load_pickle(cls, file_name, has_names_of_rows, has_names_of_columns):
-        with open(file_name, 'rb') as f:
-            loaded_data = pickle.load(f)
-        return cls._convert_matrix_to_table(loaded_data, has_names_of_rows, has_names_of_columns)
+        try:
+            with open(file_name, 'rb') as f:
+                loaded_data = pickle.load(f)
+            return cls._convert_matrix_to_table(loaded_data, has_names_of_rows, has_names_of_columns)
+        except FileNotFoundError:
+            print('Указанный файл не существует')
 
     def save_pickle(self, file_name):
         with open(file_name, 'wb') as f:
@@ -147,7 +152,10 @@ class Table:
         if not stop:
             stop = start
         for i in range(start, stop + 1):
-            result.append(self.field[i])
+            try:
+                result.append(self.field[i])
+            except IndexError:
+                print('Ошибка: строки с таким номером не существует')
         if copy_table:
             return copy.deepcopy(result)
         return result
@@ -167,8 +175,10 @@ class Table:
         return self.column_types
 
     def set_column_types(self, types_dict, by_number=True):
+        '''устанавливает типы для столбцов by_number=True -> {number : type}
+           by_number=False -> {name_of_column: type}'''
         try:
-            if by_number: # 2: int,   1: str
+            if by_number:
                 new_column_types_by_number = types_dict
                 new_column_types = dict()
                 #заполняем типы по столбцам по именам
@@ -187,20 +197,67 @@ class Table:
             self.column_types = new_column_types
             self.column_types_by_number = new_column_types_by_number
 
+
+    def _get_index_column(self, column, error_message):
+        '''преобразует параметр column в индекс столбца'''
+        try:
+            if type(column) == int:
+                ind = column
+            else:
+                ind = self.field[0].index(column)
+            t = self.get_column_types(by_number=True)[ind]  # тип столбца
+            return t, ind
+        except (ValueError, KeyError):
+            print(error_message)
+
     def get_values(self, column=0):
-        pass
+        try:
+            t, ind = self._get_index_column(column, 'Ошибка в получении значений столбцов: передан неверный параметр')
+        except:
+            return
+        result = []
+        for i in range(1, len(self.field)):
+            try:
+                result.append(t(self.field[i][ind]))
+            except TypeError:
+                print('Ошибка в получении значений столбцов: типы не были заданы')
+                return
+        return result
 
-    def get_value(column=0):
-        pass
 
-    def set_values(values, column=0):
-        pass
+    def get_value(self, column=0):
+        try:
+            t, ind = self._get_index_column(column, 'Ошибка в получении значений столбцов: передан неверный параметр')
+        except:
+            return
+        try:
+            result = t(self.field[1][ind])
+            return result
+        except TypeError:
+            print('Ошибка в получении значений столбцов: типы не были заданы')
 
-    def set_value(column=0):
-        pass
+    def set_values(self, values, column=0):
+        try:
+            t, ind = self._get_index_column(column, 'Ошибка в установлении значений столбцов: передан неверный параметр')
+        except:
+            return
+        for i in range(1, len(self.field)):
+            try:
+                self.field[i][ind] = values[i-1]
+            except IndexError:
+                print('Ошибка в установлении значений столбцов: кол-во элементов столбца != кол-ву элементов  в values')
+
+    def set_value(self,value, column=0):
+        try:
+            t, ind = self._get_index_column(column, 'Ошибка в установлении значений столбцов: передан неверный параметр')
+        except:
+            return
+        self.field[1][ind] = value
+
 
     def print_table(self):
-        new_fielf = deepcopy(self.field)
+        print()
+        new_fielf = copy.deepcopy(self.field)
         # ищем в столбце слово с максимальной длинной
         for x in range(self.total_columns):
             # длина этого слова
@@ -210,6 +267,7 @@ class Table:
                 new_fielf[y][x] = str(self.field[y][x]).ljust(mxlen + 4, " ")
         for i in new_fielf:
             print(*i)
+        print()
 
 
 # t = Table(3, 2, names_of_rows=['Даня', 'Петя', 'Вася'], names_of_columns=['Возраст', 'Пол'])
@@ -245,7 +303,7 @@ p4 = Table.load_pickle('ovoshi_nothing.pkl', False, False)
 # p3.save_pickle('ovoshi_only_columns.pkl')
 # p4.save_pickle('ovoshi_nothing.pkl')
 
-# work_obj = l4   #объект, на котором проверяются тесты
+work_obj = l1  #объект, на котором проверяются тесты
 
 # print('---------------------------Тест для  get_rows_by_number------------------------------------------------')
 # print('Было:')
@@ -257,7 +315,7 @@ p4 = Table.load_pickle('ovoshi_nothing.pkl', False, False)
 # print(res)
 # work_obj.print_table()
 # print('-------------------------------------------------------------------------------------------------------')
-
+#
 # print('---------------------------Тест для  get_rows_by_index-------------------------------------------------')
 # print('Было:')
 # work_obj.print_table()
@@ -268,8 +326,8 @@ p4 = Table.load_pickle('ovoshi_nothing.pkl', False, False)
 # print(res)
 # work_obj.print_table()
 # print('-------------------------------------------------------------------------------------------------------')
-
-
+#
+#
 # print('---------------------------Тест для  get_column_types, set_column_types --------------------------------')
 # test1 = Table(2,2,)
 # test1.set_all_values([[1,'text'], ['too', 32]])
@@ -281,4 +339,24 @@ p4 = Table.load_pickle('ovoshi_nothing.pkl', False, False)
 # print(test1.get_column_types(by_number=False))
 # print(test1.get_column_types())
 # print('--------------------------------------------------------------------------------------------------------')
-
+#
+# print('---------------------------Тест для  get_values --------------------------------')
+# l1.print_table()
+# l1.set_column_types({1:int, 2:str, 3:int}, by_number=True)
+# print(l1.get_values('вкус'))
+# print('---------------------------------------------------------------------------------')
+#
+# print('---------------------------Тест для  set_values --------------------------------')
+# l1.print_table()
+# l1.set_column_types({1:int, 2:str, 3:int}, by_number=True)
+# l1.set_values([1,2,3], 'сытость')
+# l1.print_table()
+# print('---------------------------------------------------------------------------------')
+#
+# print('---------------------------Тест для  set_value и get_value --------------------------------')
+# l1.print_table()
+# l1.set_column_types({1:int, 2:str, 3:int}, by_number=True)
+# l1.set_value('что-то', 'сытость')
+# l1.print_table()
+# print(l1.get_value('сытость'))
+# print('---------------------------------------------------------------------------------')
