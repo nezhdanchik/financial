@@ -5,8 +5,6 @@ import datetime
 import re
 import operator
 
-OPERATORS = {'плюс': operator.add, 'минус': operator.sub, 'умножить': operator.mul}
-
 class Table:
     def __init__(self, count_rows, count_columns, names_of_rows=None, names_of_columns=None):
         self.count_rows = count_rows  # количество строк
